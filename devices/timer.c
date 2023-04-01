@@ -87,15 +87,44 @@ timer_elapsed (int64_t then) {
 	return timer_ticks () - then;
 }
 
-/* Suspends execution for approximately TICKS timer ticks. */
+
+
+/* --------------------------------------------------------------- */
+/* PROJECT 1: Alarm Clock Implementation */
+/* --------------------------------------------------------------- */
+
+/* project1 (Jae Sung Park)
+   Suspends execution for approximately TICKS timer ticks. */
 void
 timer_sleep (int64_t ticks) {
 	int64_t start = timer_ticks ();
 
 	ASSERT (intr_get_level () == INTR_ON);
+	
+	// While the amount of time elapsed is less than the number of ticks
+	// the execution is suspended for, keep the thread in the blocked_list
 	while (timer_elapsed (start) < ticks)
-		thread_yield ();
+		// thread_yield ();
+		thread_blocked_list (start + ticks);
+
 }
+
+/* project1 (Jae Sung Park)
+   Timer interrupt handler. */
+static void
+timer_interrupt (struct intr_frame *args UNUSED) {
+	ticks++;
+	thread_tick ();
+
+	// Only check blocked list when the amount of time surpasses the minimum blocked time in blocked list
+	int64_t min_blocked = check_min_blocked ();
+	if (min_blocked == ticks) {
+		// Check the blocked list to see if any threads need to be unblocked
+		thread_check_unblock (min_blocked);
+	}
+}
+/* --------------------------------------------------------------- */
+
 
 /* Suspends execution for approximately MS milliseconds. */
 void
@@ -119,13 +148,6 @@ timer_nsleep (int64_t ns) {
 void
 timer_print_stats (void) {
 	printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
-}
-
-/* Timer interrupt handler. */
-static void
-timer_interrupt (struct intr_frame *args UNUSED) {
-	ticks++;
-	thread_tick ();
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

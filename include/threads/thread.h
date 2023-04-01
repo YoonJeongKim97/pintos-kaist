@@ -92,6 +92,14 @@ struct thread {
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
 
+	/* --------------------------------------------------------------- */
+	/* project1 (Jae Sung Park) */
+
+	/* Number of ticks the thread is blocked for when in blocked_list */
+	int64_t blocked_time;
+
+	/* --------------------------------------------------------------- */
+
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
@@ -142,5 +150,15 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
+
+/* --------------------------------------------------------------- */
+/* project1 (Jae Sung Park) */
+
+// PROJECT 1-1 Added Functions
+void thread_blocked_list (int64_t);
+void thread_check_unblock (int64_t);
+
+/* --------------------------------------------------------------- */
+
 
 #endif /* threads/thread.h */

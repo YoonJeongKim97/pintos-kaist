@@ -28,6 +28,20 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
+/* --------------------------------------------------------------- */
+/* project1 (Jae Sung Park) */
+
+/* List of processes in THREAD_BLOCKED state waiting to be unblocked
+   after the corresponding number of ticks has passed. */
+static struct list blocked_list;
+
+/* New functions that are defined for Project 1-1 Alarm Clock */
+bool blocked_time_less_func(struct list_elem *first, struct list_elem *second, void *aux);
+int64_t check_min_blocked (void);
+void thread_blocked_list (int64_t ticks);
+void thread_check_unblock (int64_t curr_ticks);
+/* --------------------------------------------------------------- */
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -109,6 +123,11 @@ thread_init (void) {
 	lock_init (&tid_lock);
 	list_init (&ready_list);
 	list_init (&destruction_req);
+
+	/* --------------------------------------------------------------- */
+	/* Initialize blocked list too */
+	list_init (&blocked_list);
+	/* --------------------------------------------------------------- */
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
@@ -291,6 +310,94 @@ thread_exit (void) {
 	do_schedule (THREAD_DYING);
 	NOT_REACHED ();
 }
+
+
+/* --------------------------------------------------------------- */
+
+/* project1 (Jae Sung Park)
+   Use this function as input function used for sorting or comparing list elements  */
+bool
+blocked_time_less_func(struct list_elem *first, struct list_elem *second, void *aux) {
+  
+  struct thread *get_first = list_entry(first, struct thread, elem);
+  struct thread *get_second = list_entry(second, struct thread, elem);
+
+  return get_first->blocked_time < get_second->blocked_time;
+}
+
+
+/* project1 (Jae Sung Park)
+   Get the minimum amount of blocked time amongst threads in blocked list  */
+int64_t
+check_min_blocked (void) {
+	struct list_elem *min_elem = list_min (&blocked_list, blocked_time_less_func, NULL);
+	return list_entry (min_elem, struct thread, elem)->blocked_time;
+}
+
+
+/* project1 (Jae Sung Park)
+   Insert currently running thread into blocked list and set
+   its status to THREAD_BLOCKED. The period of time it is blocked
+   for is given by parameter 'ticks'.  */
+void
+thread_blocked_list (int64_t ticks) {
+
+	struct thread *curr = thread_current ();
+	enum intr_level old_level;
+
+	ASSERT (!intr_context ());		// Check that we are not processing an external interrupt
+
+	old_level = intr_disable ();
+	if (curr != idle_thread) {
+		
+		// Change thread status to blocked
+		curr->status = THREAD_BLOCKED;
+
+		// Store number of ticks until unblocked
+		curr->blocked_time = ticks;
+
+		// Add thread to blocked list
+		list_push_back (&blocked_list, &curr->elem);
+		schedule ();
+	}
+	intr_set_level (old_level);
+}
+
+/* project1 (Jae Sung Park)
+   Within the blocked list, unblock any threads
+   that don't need to be blocked anymore */
+void
+thread_check_unblock (int64_t min_blocked) {
+	
+	struct list_elem *e, *next;
+	struct thread *iter;
+	int64_t iter_ticks;
+
+	// Check if blocked list is empty
+	if (list_empty (&blocked_list))
+		return;
+
+	e = list_begin (&blocked_list);
+
+	// Iterate over all threads in blocked list
+	while ((next = e->next) != NULL) {
+		
+		// Get blocked time of thread
+		iter = list_entry (e, struct thread, elem);
+		iter_ticks = iter->blocked_time;
+
+		// Check if thread needs to be unblocked and remove from blocked list and unblock
+		if (iter_ticks == min_blocked) {
+			e = list_remove (e);
+			thread_unblock (iter);
+		} else {
+			e = next;
+		}
+
+	}
+}
+
+/* --------------------------------------------------------------- */
 
 /* Yields the CPU.  The current thread is not put to sleep and
    may be scheduled again immediately at the scheduler's whim. */
