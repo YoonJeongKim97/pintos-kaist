@@ -9,6 +9,9 @@
 #include "vm/vm.h"
 #endif
 
+/* project1 - Priority Scheduling (Jae Sung Park) */
+#include "threads/synch.h"
+
 
 /* States in a thread's life cycle. */
 enum thread_status {
@@ -93,10 +96,30 @@ struct thread {
 	int priority;                       /* Priority. */
 
 	/* --------------------------------------------------------------- */
-	/* project1 (Jae Sung Park) */
+	/* project1 - Alarm Clock (Jae Sung Park) */
 
 	/* Number of ticks the thread is blocked for when in blocked_list */
 	int64_t blocked_time;
+
+	/* --------------------------------------------------------------- */
+
+	/* --------------------------------------------------------------- */
+	/* project1 - Priority Scheduling (Jae Sung Park) */
+
+	/* Save the original priority of a thread before priority donation */
+	int original_priority;
+
+	/* List of threads that the current thread has received donations from */
+	struct list donation_list;
+
+	/* List element for donation_list */
+	struct list_elem elem_donation;
+
+	/* List of locks that the current thread is holding */
+	// struct list holding_lock_list;
+
+	/* Lock address the thread is waiting for */
+	struct lock *waiting_lock;
 
 	/* --------------------------------------------------------------- */
 
@@ -152,7 +175,7 @@ int thread_get_load_avg (void);
 void do_iret (struct intr_frame *tf);
 
 /* --------------------------------------------------------------- */
-/* project1 (Jae Sung Park) */
+/* project1 - Alarm Clock */
 
 // PROJECT 1-1 Added Functions
 void thread_blocked_list (int64_t);
@@ -160,5 +183,10 @@ void thread_check_unblock (int64_t);
 
 /* --------------------------------------------------------------- */
 
+/* --------------------------------------------------------------- */
+/* project1 - Priority Scheduling */
+bool priority_greater_func(struct list_elem *, struct list_elem *, void *);
+
+/* --------------------------------------------------------------- */
 
 #endif /* threads/thread.h */

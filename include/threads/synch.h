@@ -38,6 +38,13 @@ void cond_wait (struct condition *, struct lock *);
 void cond_signal (struct condition *, struct lock *);
 void cond_broadcast (struct condition *, struct lock *);
 
+/* --------------------------------------------------------------- */
+/* project1 - Priority Scheduling */
+
+void donate_recursive (struct thread *);
+
+/* --------------------------------------------------------------- */
+
 /* Optimization barrier.
  *
  * The compiler will not reorder operations across an

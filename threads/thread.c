@@ -29,7 +29,7 @@
 static struct list ready_list;
 
 /* --------------------------------------------------------------- */
-/* project1 (Jae Sung Park) */
+/* project1 - Alarm Clock   */
 
 /* List of processes in THREAD_BLOCKED state waiting to be unblocked
    after the corresponding number of ticks has passed. */
@@ -180,55 +180,6 @@ thread_print_stats (void) {
 			idle_ticks, kernel_ticks, user_ticks);
 }
 
-/* Creates a new kernel thread named NAME with the given initial
-   PRIORITY, which executes FUNCTION passing AUX as the argument,
-   and adds it to the ready queue.  Returns the thread identifier
-   for the new thread, or TID_ERROR if creation fails.
-
-   If thread_start() has been called, then the new thread may be
-   scheduled before thread_create() returns.  It could even exit
-   before thread_create() returns.  Contrariwise, the original
-   thread may run for any amount of time before the new thread is
-   scheduled.  Use a semaphore or some other form of
-   synchronization if you need to ensure ordering.
-
-   The code provided sets the new thread's `priority' member to
-   PRIORITY, but no actual priority scheduling is implemented.
-   Priority scheduling is the goal of Problem 1-3. */
-tid_t
-thread_create (const char *name, int priority,
-		thread_func *function, void *aux) {
-	struct thread *t;
-	tid_t tid;
-
-	ASSERT (function != NULL);
-
-	/* Allocate thread. */
-	t = palloc_get_page (PAL_ZERO);
-	if (t == NULL)
-		return TID_ERROR;
-
-	/* Initialize thread. */
-	init_thread (t, name, priority);
-	tid = t->tid = allocate_tid ();
-
-	/* Call the kernel_thread if it scheduled.
-	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
-	t->tf.rip = (uintptr_t) kernel_thread;
-	t->tf.R.rdi = (uint64_t) function;
-	t->tf.R.rsi = (uint64_t) aux;
-	t->tf.ds = SEL_KDSEG;
-	t->tf.es = SEL_KDSEG;
-	t->tf.ss = SEL_KDSEG;
-	t->tf.cs = SEL_KCSEG;
-	t->tf.eflags = FLAG_IF;
-
-	/* Add to run queue. */
-	thread_unblock (t);
-
-	return tid;
-}
-
 /* Puts the current thread to sleep.  It will not be scheduled
    again until awoken by thread_unblock().
 
@@ -241,27 +192,6 @@ thread_block (void) {
 	ASSERT (intr_get_level () == INTR_OFF);
 	thread_current ()->status = THREAD_BLOCKED;
 	schedule ();
-}
-
-/* Transitions a blocked thread T to the ready-to-run state.
-   This is an error if T is not blocked.  (Use thread_yield() to
-   make the running thread ready.)
-
-   This function does not preempt the running thread.  This can
-   be important: if the caller had disabled interrupts itself,
-   it may expect that it can atomically unblock a thread and
-   update other data. */
-void
-thread_unblock (struct thread *t) {
-	enum intr_level old_level;
-
-	ASSERT (is_thread (t));
-
-	old_level = intr_disable ();
-	ASSERT (t->status == THREAD_BLOCKED);
-	list_push_back (&ready_list, &t->elem);
-	t->status = THREAD_READY;
-	intr_set_level (old_level);
 }
 
 /* Returns the name of the running thread. */
@@ -314,19 +244,176 @@ thread_exit (void) {
 
 /* --------------------------------------------------------------- */
 
-/* project1 (Jae Sung Park)
+/* project1 - Priority Scheduling   */
+/* Creates a new kernel thread named NAME with the given initial
+   PRIORITY, which executes FUNCTION passing AUX as the argument,
+   and adds it to the ready queue.  Returns the thread identifier
+   for the new thread, or TID_ERROR if creation fails.
+
+   If thread_start() has been called, then the new thread may be
+   scheduled before thread_create() returns.  It could even exit
+   before thread_create() returns.  Contrariwise, the original
+   thread may run for any amount of time before the new thread is
+   scheduled.  Use a semaphore or some other form of
+   synchronization if you need to ensure ordering.
+
+   The code provided sets the new thread's `priority' member to
+   PRIORITY, but no actual priority scheduling is implemented.
+   Priority scheduling is the goal of Problem 1-3. */
+tid_t
+thread_create (const char *name, int priority,
+		thread_func *function, void *aux) {
+	struct thread *t;
+	tid_t tid;
+
+	ASSERT (function != NULL);
+
+	/* Allocate thread. */
+	t = palloc_get_page (PAL_ZERO);
+	if (t == NULL)
+		return TID_ERROR;
+
+	/* Initialize thread. */
+	init_thread (t, name, priority);
+	tid = t->tid = allocate_tid ();
+
+	/* Call the kernel_thread if it scheduled.
+	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
+	t->tf.rip = (uintptr_t) kernel_thread;
+	t->tf.R.rdi = (uint64_t) function;
+	t->tf.R.rsi = (uint64_t) aux;
+	t->tf.ds = SEL_KDSEG;
+	t->tf.es = SEL_KDSEG;
+	t->tf.ss = SEL_KDSEG;
+	t->tf.cs = SEL_KCSEG;
+	t->tf.eflags = FLAG_IF;
+
+	/* Add to run queue. */
+	thread_unblock (t);
+	
+	/* Compare new thread with current thread and check which priority is greater */
+	if (t->priority > thread_current ()->priority)
+		thread_yield ();
+
+	return tid;
+}
+
+/* project1 - Priority Scheduling 
+   Use this function as input function used for sorting or comparing list elements  */
+bool
+priority_greater_func(struct list_elem *first, struct list_elem *second, void *aux) {
+
+	struct thread *get_first = list_entry (first, struct thread, elem);
+	struct thread *get_second = list_entry (second, struct thread, elem);
+
+	return get_first->priority > get_second->priority;
+}
+
+/* project1 - Priority Scheduling 
+/* Transitions a blocked thread T to the ready-to-run state.
+   This is an error if T is not blocked.  (Use thread_yield() to
+   make the running thread ready.)
+
+   This function does not preempt the running thread.  This can
+   be important: if the caller had disabled interrupts itself,
+   it may expect that it can atomically unblock a thread and
+   update other data. */
+void
+thread_unblock (struct thread *t) {
+	enum intr_level old_level;
+
+	ASSERT (is_thread (t));
+
+	old_level = intr_disable ();
+	ASSERT (t->status == THREAD_BLOCKED);
+
+	// list_push_back (&ready_list, &t->elem);
+	list_insert_ordered (&ready_list, &t->elem, priority_greater_func, NULL);
+
+	t->status = THREAD_READY;
+	intr_set_level (old_level);
+}
+
+/* project1 - Priority Scheduling   */
+/* Yields the CPU.  The current thread is not put to sleep and
+   may be scheduled again immediately at the scheduler's whim. */
+void
+thread_yield (void) {
+	struct thread *curr = thread_current ();
+	enum intr_level old_level;
+
+	ASSERT (!intr_context ());
+
+	old_level = intr_disable ();
+
+	if (curr != idle_thread)
+		list_insert_ordered (&ready_list, &curr->elem, priority_greater_func, NULL);
+
+	do_schedule (THREAD_READY);
+	intr_set_level (old_level);
+}
+
+/* Sets the current thread's priority to NEW_PRIORITY. */
+void
+thread_set_priority (int new_priority) {
+	
+	int max_priority;
+	struct thread *curr = thread_current ();
+	struct list *all_donations = &curr->donation_list;
+	
+	// curr->priority = new_priority;
+	curr->original_priority = new_priority;
+
+	// Reselect the highest priority amongst the donation_list
+	if (!list_empty(all_donations)) {
+		max_priority = list_entry (list_max (all_donations, priority_greater_func, NULL), struct thread, elem_donation)->priority; 
+		if (max_priority > new_priority) {
+			new_priority = max_priority;
+		}
+	}
+	curr->priority = new_priority;
+
+	// Call thread_yield() to reorder threads by order of priority
+	thread_yield();
+}
+
+/* Does basic initialization of T as a blocked thread named
+   NAME. */
+static void
+init_thread (struct thread *t, const char *name, int priority) {
+	ASSERT (t != NULL);
+	ASSERT (PRI_MIN <= priority && priority <= PRI_MAX);
+	ASSERT (name != NULL);
+
+	memset (t, 0, sizeof *t);
+	t->status = THREAD_BLOCKED;
+	strlcpy (t->name, name, sizeof t->name);
+	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
+	t->priority = priority;
+	t->magic = THREAD_MAGIC;
+
+	// Project 1-2: Priority Scheduling
+	t->original_priority = priority;
+	list_init (&t->donation_list);
+}
+
+/* --------------------------------------------------------------- */
+
+/* --------------------------------------------------------------- */
+
+/* project1 - Alarm Clock
    Use this function as input function used for sorting or comparing list elements  */
 bool
 blocked_time_less_func(struct list_elem *first, struct list_elem *second, void *aux) {
   
-  struct thread *get_first = list_entry(first, struct thread, elem);
-  struct thread *get_second = list_entry(second, struct thread, elem);
+  struct thread *get_first = list_entry (first, struct thread, elem);
+  struct thread *get_second = list_entry (second, struct thread, elem);
 
   return get_first->blocked_time < get_second->blocked_time;
 }
 
 
-/* project1 (Jae Sung Park)
+/* project1 - Alarm Clock  
    Get the minimum amount of blocked time amongst threads in blocked list  */
 int64_t
 check_min_blocked (void) {
@@ -335,7 +422,7 @@ check_min_blocked (void) {
 }
 
 
-/* project1 (Jae Sung Park)
+/* project1 - Alarm Clock  
    Insert currently running thread into blocked list and set
    its status to THREAD_BLOCKED. The period of time it is blocked
    for is given by parameter 'ticks'.  */
@@ -363,7 +450,7 @@ thread_blocked_list (int64_t ticks) {
 	intr_set_level (old_level);
 }
 
-/* project1 (Jae Sung Park)
+/* project1 - Alarm Clock 
    Within the blocked list, unblock any threads
    that don't need to be blocked anymore */
 void
@@ -398,28 +485,6 @@ thread_check_unblock (int64_t min_blocked) {
 }
 
 /* --------------------------------------------------------------- */
-
-/* Yields the CPU.  The current thread is not put to sleep and
-   may be scheduled again immediately at the scheduler's whim. */
-void
-thread_yield (void) {
-	struct thread *curr = thread_current ();
-	enum intr_level old_level;
-
-	ASSERT (!intr_context ());
-
-	old_level = intr_disable ();
-	if (curr != idle_thread)
-		list_push_back (&ready_list, &curr->elem);
-	do_schedule (THREAD_READY);
-	intr_set_level (old_level);
-}
-
-/* Sets the current thread's priority to NEW_PRIORITY. */
-void
-thread_set_priority (int new_priority) {
-	thread_current ()->priority = new_priority;
-}
 
 /* Returns the current thread's priority. */
 int
@@ -499,23 +564,6 @@ kernel_thread (thread_func *function, void *aux) {
 	intr_enable ();       /* The scheduler runs with interrupts off. */
 	function (aux);       /* Execute the thread function. */
 	thread_exit ();       /* If function() returns, kill the thread. */
-}
-
-
-/* Does basic initialization of T as a blocked thread named
-   NAME. */
-static void
-init_thread (struct thread *t, const char *name, int priority) {
-	ASSERT (t != NULL);
-	ASSERT (PRI_MIN <= priority && priority <= PRI_MAX);
-	ASSERT (name != NULL);
-
-	memset (t, 0, sizeof *t);
-	t->status = THREAD_BLOCKED;
-	strlcpy (t->name, name, sizeof t->name);
-	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
-	t->priority = priority;
-	t->magic = THREAD_MAGIC;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
